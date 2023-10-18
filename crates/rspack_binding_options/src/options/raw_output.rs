@@ -1,6 +1,7 @@
+use napi::{Either, JsFunction, JsString};
 use napi_derive::napi;
 use rspack_core::{
-  to_identifier, BoxPlugin, CrossOriginLoading, LibraryAuxiliaryComment, LibraryName,
+  to_identifier, BoxPlugin, CrossOriginLoading, Filename, LibraryAuxiliaryComment, LibraryName,
   LibraryOptions, OutputOptions, TrustedTypes,
 };
 use serde::Deserialize;
@@ -110,6 +111,16 @@ impl From<RawCrossOriginLoading> for CrossOriginLoading {
   }
 }
 
+type RawFilename = Either<JsString, JsFunction>;
+impl From<RawFilename> for Filename {
+  fn from(value: RawFilename) -> Self {
+    match value {
+      Either::A(str) => {}
+      Either::B(f) => {}
+    }
+  }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[napi(object)]
@@ -121,7 +132,7 @@ pub struct RawOutputOptions {
   pub wasm_loading: String,
   pub enabled_wasm_loading_types: Vec<String>,
   pub webassembly_module_filename: String,
-  pub filename: String,
+  pub filename: RawFilename,
   pub chunk_filename: String,
   pub cross_origin_loading: RawCrossOriginLoading,
   pub css_filename: String,
