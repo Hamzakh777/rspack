@@ -20,6 +20,7 @@ impl NapiErrorExt for Error {
       backtrace: "".to_owned(),
     }
   }
+
   fn into_rspack_error_with_detail(self, env: &Env) -> rspack_error::Error {
     let (reason, backtrace) = extract_stack_or_message_from_napi_error(env, self);
     rspack_error::Error::Napi {

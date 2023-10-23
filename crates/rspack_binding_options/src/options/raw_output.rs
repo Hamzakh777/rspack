@@ -1,8 +1,16 @@
-use napi::{Either, JsFunction, JsString};
+use std::sync::Arc;
+
+use derivative::Derivative;
+use napi::{Env, JsFunction};
 use napi_derive::napi;
 use rspack_core::{
-  to_identifier, BoxPlugin, CrossOriginLoading, Filename, LibraryAuxiliaryComment, LibraryName,
-  LibraryOptions, OutputOptions, TrustedTypes,
+  to_identifier, BoxPlugin, CrossOriginLoading, FilenameFnCtx, LibraryAuxiliaryComment,
+  LibraryName, LibraryOptions, OutputFilename, OutputOptions, TrustedTypes,
+};
+use rspack_error::internal_error;
+use rspack_napi_shared::{
+  threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+  NapiResultExt, NAPI_ENV,
 };
 use serde::Deserialize;
 
@@ -111,12 +119,58 @@ impl From<RawCrossOriginLoading> for CrossOriginLoading {
   }
 }
 
-type RawFilename = Either<JsString, JsFunction>;
-impl From<RawFilename> for Filename {
-  fn from(value: RawFilename) -> Self {
-    match value {
-      Either::A(str) => {}
-      Either::B(f) => {}
+#[derive(Derivative, Deserialize)]
+#[derivative(Debug)]
+#[serde(rename_all = "camelCase")]
+#[napi(object)]
+pub struct RawFilename {
+  #[napi(ts_type = r#""string" | "function""#)]
+  pub r#type: String,
+  pub string_payload: Option<String>,
+  #[derivative(Debug = "ignore")]
+  #[serde(skip_deserializing)]
+  pub fn_payload: Option<JsFunction>,
+}
+
+#[napi(object)]
+pub struct RawFilenameFnCtx {
+  pub hash: String,
+}
+
+impl TryFrom<RawFilename> for OutputFilename {
+  type Error = rspack_error::Error;
+
+  fn try_from(value: RawFilename) -> Result<Self, Self::Error> {
+    match value.r#type.as_str() {
+      "string" => {
+        let s = value.string_payload.ok_or_else(|| {
+          internal_error!("should have a string_payload when RawFilename.type is \"string\"")
+        })?;
+        Ok(OutputFilename::String(s))
+      }
+      "function" => {
+        let func = value.fn_payload.ok_or_else(|| {
+          internal_error!("should have a fn_payload when RawFilename.type is \"function\"")
+        })?;
+        let func: ThreadsafeFunction<RawFilenameFnCtx, String> =
+          NAPI_ENV.with(|env| -> anyhow::Result<_> {
+            let env = env.borrow().expect("Failed to get env with external");
+            let func_use = rspack_binding_macros::js_fn_into_threadsafe_fn!(func, &Env::from(env));
+            Ok(func_use)
+          })?;
+        let func = Arc::new(func);
+        Ok(OutputFilename::Fn(Box::new(move |ctx: FilenameFnCtx| {
+          let func = func.clone();
+          Box::pin(async move {
+            func
+              .call(ctx.into(), ThreadsafeFunctionCallMode::NonBlocking)
+              .into_rspack_result()?
+              .await
+              .map_err(|err| internal_error!("Failed to call rule.use function: {err}"))?
+          })
+        })))
+      }
+      _ => unreachable!(),
     }
   }
 }

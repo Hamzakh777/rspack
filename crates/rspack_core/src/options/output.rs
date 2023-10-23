@@ -1,10 +1,12 @@
 use std::{
+  fmt,
   path::{Path, PathBuf},
   str::FromStr,
   string::ParseError,
 };
 
 use derivative::Derivative;
+use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use rspack_hash::RspackHash;
@@ -251,24 +253,45 @@ impl<'a> PathData<'a> {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Filename {
-  template: String,
+pub struct FilenameFnCtx<'a> {
+  pub hash: &'a str,
 }
+
+pub type FilenameFn = Box<
+  dyn for<'a> Fn(FilenameFnCtx<'a>) -> BoxFuture<'a, rspack_error::Result<String>> + Sync + Send,
+>;
+
+// #[derive(Clone, PartialEq, Eq)]
+pub enum Filename {
+  String(String),
+  Fn(FilenameFn),
+}
+
+impl fmt::Debug for Filename {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Self::String(arg0) => f.debug_tuple("String").field(arg0).finish(),
+      Self::Fn(_) => f.debug_tuple("Fn").finish(),
+    }
+  }
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct Filename {
+//   template: String,
+// }
 
 impl FromStr for Filename {
   type Err = ParseError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    Ok(Self {
-      template: s.to_string(),
-    })
+    Ok(Self::String(s.to_string()))
   }
 }
 
 impl From<String> for Filename {
   fn from(value: String) -> Self {
-    Self { template: value }
+    Self::String(value)
   }
 }
 
@@ -278,133 +301,145 @@ impl Filename {
   }
 
   pub fn has_hash_placeholder(&self) -> bool {
-    HASH_PLACEHOLDER.is_match(&self.template) || FULL_HASH_PLACEHOLDER.is_match(&self.template)
+    let res = match &self {
+      Filename::String(content) => content,
+      Filename::Fn(func) => &"not implemented".to_string(),
+    };
+    HASH_PLACEHOLDER.is_match(res) || FULL_HASH_PLACEHOLDER.is_match(res)
   }
 
   pub fn render(&self, options: PathData, mut asset_info: Option<&mut AssetInfo>) -> String {
-    let mut template = self.template.clone();
-    if let Some(filename) = options.filename {
-      if let Some(caps) = DATA_URI_REGEX.captures(filename) {
-        let ext = mime_guess::get_mime_extensions_str(
-          caps
-            .get(1)
-            .expect("should match mime for data uri")
-            .as_str(),
-        )
-        .map(|exts| exts[0]);
-        template = template.replace(FILE_PLACEHOLDER, "");
-        template = template.replace(QUERY_PLACEHOLDER, "");
-        template = template.replace(FRAGMENT_PLACEHOLDER, "");
-        template = template.replace(PATH_PLACEHOLDER, "");
-        template = template.replace(BASE_PLACEHOLDER, "");
-        template = template.replace(NAME_PLACEHOLDER, "");
-        template = template.replace(
-          EXT_PLACEHOLDER,
-          &ext.map(|ext| format!(".{}", ext)).unwrap_or_default(),
-        );
-      } else if let Some(ResourceParsedData {
-        path: file,
-        query,
-        fragment,
-      }) = parse_resource(filename)
-      {
-        template = template.replace(FILE_PLACEHOLDER, &file.to_string_lossy());
-        template = template.replace(
-          EXT_PLACEHOLDER,
-          &file
-            .extension()
-            .map(|p| format!(".{}", p.to_string_lossy()))
-            .unwrap_or_default(),
-        );
-        if let Some(base) = file.file_name().map(|p| p.to_string_lossy()) {
-          template = template.replace(BASE_PLACEHOLDER, &base);
-        }
-        if let Some(name) = file.file_stem().map(|p| p.to_string_lossy()) {
-          template = template.replace(NAME_PLACEHOLDER, &name);
-        }
-        template = template.replace(
-          PATH_PLACEHOLDER,
-          &file
-            .parent()
-            .map(|p| p.to_string_lossy())
-            // "" -> "", "folder" -> "folder/"
-            .filter(|p| !p.is_empty())
-            .map(|p| p + "/")
-            .unwrap_or_default(),
-        );
-        template = template.replace(QUERY_PLACEHOLDER, &query.unwrap_or_default());
-        template = template.replace(FRAGMENT_PLACEHOLDER, &fragment.unwrap_or_default());
-      }
-    }
-    if let Some(content_hash) = options.content_hash {
-      if let Some(asset_info) = asset_info.as_mut() {
-        // set version as content hash
-        asset_info.version = content_hash.to_string();
-      }
-      template = CONTENT_HASH_PLACEHOLDER
-        .replace_all(&template, |caps: &Captures| {
-          let content_hash = &content_hash[..hash_len(content_hash, caps)];
-          if let Some(asset_info) = asset_info.as_mut() {
-            asset_info.set_immutable(true);
-            asset_info.set_content_hash(content_hash.to_owned());
+    match &self {
+      Filename::String(content) => {
+        let mut template = self.template.clone();
+        if let Some(filename) = options.filename {
+          if let Some(caps) = DATA_URI_REGEX.captures(filename) {
+            let ext = mime_guess::get_mime_extensions_str(
+              caps
+                .get(1)
+                .expect("should match mime for data uri")
+                .as_str(),
+            )
+            .map(|exts| exts[0]);
+            template = template.replace(FILE_PLACEHOLDER, "");
+            template = template.replace(QUERY_PLACEHOLDER, "");
+            template = template.replace(FRAGMENT_PLACEHOLDER, "");
+            template = template.replace(PATH_PLACEHOLDER, "");
+            template = template.replace(BASE_PLACEHOLDER, "");
+            template = template.replace(NAME_PLACEHOLDER, "");
+            template = template.replace(
+              EXT_PLACEHOLDER,
+              &ext.map(|ext| format!(".{}", ext)).unwrap_or_default(),
+            );
+          } else if let Some(ResourceParsedData {
+            path: file,
+            query,
+            fragment,
+          }) = parse_resource(filename)
+          {
+            template = template.replace(FILE_PLACEHOLDER, &file.to_string_lossy());
+            template = template.replace(
+              EXT_PLACEHOLDER,
+              &file
+                .extension()
+                .map(|p| format!(".{}", p.to_string_lossy()))
+                .unwrap_or_default(),
+            );
+            if let Some(base) = file.file_name().map(|p| p.to_string_lossy()) {
+              template = template.replace(BASE_PLACEHOLDER, &base);
+            }
+            if let Some(name) = file.file_stem().map(|p| p.to_string_lossy()) {
+              template = template.replace(NAME_PLACEHOLDER, &name);
+            }
+            template = template.replace(
+              PATH_PLACEHOLDER,
+              &file
+                .parent()
+                .map(|p| p.to_string_lossy())
+                // "" -> "", "folder" -> "folder/"
+                .filter(|p| !p.is_empty())
+                .map(|p| p + "/")
+                .unwrap_or_default(),
+            );
+            template = template.replace(QUERY_PLACEHOLDER, &query.unwrap_or_default());
+            template = template.replace(FRAGMENT_PLACEHOLDER, &fragment.unwrap_or_default());
           }
-          content_hash
-        })
-        .into_owned();
-    }
-    if let Some(hash) = options.hash {
-      for reg in [&HASH_PLACEHOLDER, &FULL_HASH_PLACEHOLDER] {
-        template = reg
-          .replace_all(&template, |caps: &Captures| {
-            let hash = &hash[..hash_len(hash, caps)];
-            if let Some(asset_info) = asset_info.as_mut() {
-              asset_info.set_immutable(true);
-              asset_info.set_content_hash(hash.to_owned());
-            }
-            hash
-          })
-          .into_owned();
-      }
-    }
-    if let Some(chunk) = options.chunk {
-      if let Some(id) = &options.id {
-        template = template.replace(ID_PLACEHOLDER, id);
-      } else if let Some(id) = &chunk.id {
-        template = template.replace(ID_PLACEHOLDER, id);
-      }
-      if let Some(name) = chunk.name_for_filename_template() {
-        template = template.replace(NAME_PLACEHOLDER, name);
-      }
-      if let Some(d) = chunk.rendered_hash.as_ref() {
-        template = CHUNK_HASH_PLACEHOLDER
-          .replace_all(&template, |caps: &Captures| {
-            let hash = &**d;
-            let hash = &hash[..hash_len(hash, caps)];
-            if let Some(asset_info) = asset_info.as_mut() {
-              asset_info.set_immutable(true);
-              asset_info.set_chunk_hash(hash.to_owned());
-            }
-            hash
-          })
-          .into_owned();
-      }
-    }
-
-    if let Some(id) = &options.id {
-      template = template.replace(ID_PLACEHOLDER, id);
-    } else if let Some(module) = options.module {
-      if let Some(chunk_graph) = options.chunk_graph {
-        if let Some(id) = chunk_graph.get_module_id(module.identifier()) {
-          template = template.replace(ID_PLACEHOLDER, id);
         }
+        if let Some(content_hash) = options.content_hash {
+          if let Some(asset_info) = asset_info.as_mut() {
+            // set version as content hash
+            asset_info.version = content_hash.to_string();
+          }
+          template = CONTENT_HASH_PLACEHOLDER
+            .replace_all(&template, |caps: &Captures| {
+              let content_hash = &content_hash[..hash_len(content_hash, caps)];
+              if let Some(asset_info) = asset_info.as_mut() {
+                asset_info.set_immutable(true);
+                asset_info.set_content_hash(content_hash.to_owned());
+              }
+              content_hash
+            })
+            .into_owned();
+        }
+        if let Some(hash) = options.hash {
+          for reg in [&HASH_PLACEHOLDER, &FULL_HASH_PLACEHOLDER] {
+            template = reg
+              .replace_all(&template, |caps: &Captures| {
+                let hash = &hash[..hash_len(hash, caps)];
+                if let Some(asset_info) = asset_info.as_mut() {
+                  asset_info.set_immutable(true);
+                  asset_info.set_content_hash(hash.to_owned());
+                }
+                hash
+              })
+              .into_owned();
+          }
+        }
+        if let Some(chunk) = options.chunk {
+          if let Some(id) = &options.id {
+            template = template.replace(ID_PLACEHOLDER, id);
+          } else if let Some(id) = &chunk.id {
+            template = template.replace(ID_PLACEHOLDER, id);
+          }
+          if let Some(name) = chunk.name_for_filename_template() {
+            template = template.replace(NAME_PLACEHOLDER, name);
+          }
+          if let Some(d) = chunk.rendered_hash.as_ref() {
+            template = CHUNK_HASH_PLACEHOLDER
+              .replace_all(&template, |caps: &Captures| {
+                let hash = &**d;
+                let hash = &hash[..hash_len(hash, caps)];
+                if let Some(asset_info) = asset_info.as_mut() {
+                  asset_info.set_immutable(true);
+                  asset_info.set_chunk_hash(hash.to_owned());
+                }
+                hash
+              })
+              .into_owned();
+          }
+        }
+
+        if let Some(id) = &options.id {
+          template = template.replace(ID_PLACEHOLDER, id);
+        } else if let Some(module) = options.module {
+          if let Some(chunk_graph) = options.chunk_graph {
+            if let Some(id) = chunk_graph.get_module_id(module.identifier()) {
+              template = template.replace(ID_PLACEHOLDER, id);
+            }
+          }
+        }
+        template = template.replace(RUNTIME_PLACEHOLDER, options.runtime.unwrap_or("_"));
+        if let Some(url) = options.url {
+          template = template.replace(URL_PLACEHOLDER, url);
+        }
+
+        template
+      }
+      Filename::Fn(func) => {
+        println!("not implemented");
+        "not implemented".to_string()
       }
     }
-    template = template.replace(RUNTIME_PLACEHOLDER, options.runtime.unwrap_or("_"));
-    if let Some(url) = options.url {
-      template = template.replace(URL_PLACEHOLDER, url);
-    }
-
-    template
   }
 }
 
