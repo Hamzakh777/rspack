@@ -261,7 +261,7 @@ pub type FilenameFn = Box<
   dyn for<'a> Fn(FilenameFnCtx<'a>) -> BoxFuture<'a, rspack_error::Result<String>> + Sync + Send,
 >;
 
-// #[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Filename {
   String(String),
   Fn(FilenameFn),
@@ -275,11 +275,6 @@ impl fmt::Debug for Filename {
     }
   }
 }
-
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub struct Filename {
-//   template: String,
-// }
 
 impl FromStr for Filename {
   type Err = ParseError;
@@ -296,9 +291,9 @@ impl From<String> for Filename {
 }
 
 impl Filename {
-  pub fn template(&self) -> &str {
-    &self.template
-  }
+  // pub fn .template(&self) -> &str {
+  //   &self.template
+  // }
 
   pub fn has_hash_placeholder(&self) -> bool {
     let res = match &self {
@@ -311,7 +306,7 @@ impl Filename {
   pub fn render(&self, options: PathData, mut asset_info: Option<&mut AssetInfo>) -> String {
     match &self {
       Filename::String(content) => {
-        let mut template = self.template.clone();
+        let mut template = content.clone();
         if let Some(filename) = options.filename {
           if let Some(caps) = DATA_URI_REGEX.captures(filename) {
             let ext = mime_guess::get_mime_extensions_str(

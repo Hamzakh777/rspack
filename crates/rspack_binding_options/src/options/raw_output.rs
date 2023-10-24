@@ -4,7 +4,7 @@ use derivative::Derivative;
 use napi::{Env, JsFunction};
 use napi_derive::napi;
 use rspack_core::{
-  to_identifier, BoxPlugin, CrossOriginLoading, FilenameFnCtx, LibraryAuxiliaryComment,
+  to_identifier, BoxPlugin, CrossOriginLoading, Filename, FilenameFnCtx, LibraryAuxiliaryComment,
   LibraryName, LibraryOptions, OutputFilename, OutputOptions, TrustedTypes,
 };
 use rspack_error::internal_error;
@@ -137,7 +137,7 @@ pub struct RawFilenameFnCtx {
   pub hash: String,
 }
 
-impl TryFrom<RawFilename> for OutputFilename {
+impl TryFrom<RawFilename> for Filename {
   type Error = rspack_error::Error;
 
   fn try_from(value: RawFilename) -> Result<Self, Self::Error> {
@@ -146,7 +146,7 @@ impl TryFrom<RawFilename> for OutputFilename {
         let s = value.string_payload.ok_or_else(|| {
           internal_error!("should have a string_payload when RawFilename.type is \"string\"")
         })?;
-        Ok(OutputFilename::String(s))
+        Ok(Filename::String(s))
       }
       "function" => {
         let func = value.fn_payload.ok_or_else(|| {
@@ -159,7 +159,7 @@ impl TryFrom<RawFilename> for OutputFilename {
             Ok(func_use)
           })?;
         let func = Arc::new(func);
-        Ok(OutputFilename::Fn(Box::new(move |ctx: FilenameFnCtx| {
+        Ok(Filename::Fn(Box::new(move |ctx: FilenameFnCtx| {
           let func = func.clone();
           Box::pin(async move {
             func
