@@ -15,7 +15,8 @@ import type {
 	RawIncrementalRebuild,
 	RawModuleRuleUses,
 	RawFuncUseCtx,
-	RawRspackFuture
+	RawRspackFuture,
+	RawFilename
 } from "@rspack/binding";
 import assert from "assert";
 import { Compiler } from "../Compiler";
@@ -49,7 +50,8 @@ import {
 	GeneratorOptionsByModuleType,
 	IncrementalRebuildOptions,
 	OptimizationSplitChunksOptions,
-	RspackFutureOptions
+	RspackFutureOptions,
+	Filename
 } from "./zod";
 import {
 	ExperimentsNormalized,
@@ -181,6 +183,22 @@ function getRawCrossOriginLoading(
 	return { type: "string", stringPayload: crossOriginLoading };
 }
 
+function getFilename(entry: Filename): RawFilename {
+	if (typeof entry === "string") {
+		return {
+			type: "string",
+			stringPayload: entry
+		};
+	}
+	if (typeof entry === "function") {
+		return {
+			type: "function",
+			fnPayload: entry
+		};
+	}
+	throw new Error("BannerContent should be a string or function");
+}
+
 function getRawOutput(output: OutputNormalized): RawOptions["output"] {
 	const chunkLoading = output.chunkLoading!;
 	const wasmLoading = output.wasmLoading!;
@@ -191,14 +209,14 @@ function getRawOutput(output: OutputNormalized): RawOptions["output"] {
 		publicPath: output.publicPath!,
 		clean: output.clean!,
 		assetModuleFilename: output.assetModuleFilename!,
-		filename: output.filename!,
-		chunkFilename: output.chunkFilename!,
+		filename: getFilename(output.filename!),
+		chunkFilename: getFilename(output.chunkFilename!),
 		chunkLoading: chunkLoading === false ? "false" : chunkLoading,
 		crossOriginLoading: getRawCrossOriginLoading(output.crossOriginLoading!),
-		cssFilename: output.cssFilename!,
-		cssChunkFilename: output.cssChunkFilename!,
-		hotUpdateChunkFilename: output.hotUpdateChunkFilename!,
-		hotUpdateMainFilename: output.hotUpdateMainFilename!,
+		cssFilename: getFilename(output.cssFilename!),
+		cssChunkFilename: getFilename(output.cssChunkFilename!),
+		hotUpdateChunkFilename: getFilename(output.hotUpdateChunkFilename!),
+		hotUpdateMainFilename: getFilename(output.hotUpdateMainFilename!),
 		hotUpdateGlobal: output.hotUpdateGlobal!,
 		uniqueName: output.uniqueName!,
 		chunkLoadingGlobal: output.chunkLoadingGlobal!,
@@ -631,7 +649,7 @@ function getRawAssetResourceGeneratorOptions(
 	options: AssetResourceGeneratorOptions
 ): RawAssetResourceGeneratorOptions {
 	return {
-		filename: options.filename,
+		filename: getFilename(options.filename!),
 		publicPath: options.publicPath
 	};
 }

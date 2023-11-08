@@ -189,7 +189,7 @@ impl ChunkGroup {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ChunkGroupKind {
   Entrypoint {
     initial: bool,
@@ -224,7 +224,7 @@ impl ChunkGroupKind {
   }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone)]
 pub struct EntryOptions {
   pub name: Option<String>,
   pub runtime: Option<String>,
@@ -232,7 +232,7 @@ pub struct EntryOptions {
   pub async_chunks: Option<bool>,
   pub public_path: Option<PublicPath>,
   pub base_uri: Option<String>,
-  pub filename: Option<Filename>,
+  pub filename: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

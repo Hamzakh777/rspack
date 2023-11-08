@@ -9,7 +9,7 @@ export type EntryOptions = {
 	asyncChunks?: boolean;
 	publicPath?: PublicPath;
 	baseUri?: string;
-	filename?: Filename;
+	filename?: string;
 };
 export const EntryPlugin = create(
 	BuiltinPluginName.EntryPlugin,

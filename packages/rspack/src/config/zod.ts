@@ -53,7 +53,17 @@ export type WasmLoadingType = z.infer<typeof wasmLoadingType>;
 const wasmLoading = z.literal(false).or(wasmLoadingType);
 export type WasmLoading = z.infer<typeof wasmLoading>;
 
-const filenameTemplate = z.string();
+const filenameFunction = z
+	.function()
+	.args(
+		z.object({
+			hash: z.string()
+		})
+	)
+	.returns(z.string());
+export type FilenameFunction = z.infer<typeof filenameFunction>;
+
+const filenameTemplate = z.string().or(filenameFunction);
 export type FilenameTemplate = z.infer<typeof filenameTemplate>;
 
 const filename = filenameTemplate;

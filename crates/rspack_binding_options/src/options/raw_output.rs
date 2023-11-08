@@ -5,7 +5,7 @@ use napi::{Env, JsFunction};
 use napi_derive::napi;
 use rspack_core::{
   to_identifier, BoxPlugin, CrossOriginLoading, Filename, FilenameFnCtx, LibraryAuxiliaryComment,
-  LibraryName, LibraryOptions, OutputFilename, OutputOptions, TrustedTypes,
+  LibraryName, LibraryOptions, OutputOptions, TrustedTypes,
 };
 use rspack_error::internal_error;
 use rspack_napi_shared::{
@@ -137,6 +137,14 @@ pub struct RawFilenameFnCtx {
   pub hash: String,
 }
 
+impl<'a> From<FilenameFnCtx<'a>> for RawFilenameFnCtx {
+  fn from(value: FilenameFnCtx) -> Self {
+    Self {
+      hash: value.hash.to_string(),
+    }
+  }
+}
+
 impl TryFrom<RawFilename> for Filename {
   type Error = rspack_error::Error;
 
@@ -159,16 +167,18 @@ impl TryFrom<RawFilename> for Filename {
             Ok(func_use)
           })?;
         let func = Arc::new(func);
-        Ok(Filename::Fn(Box::new(move |ctx: FilenameFnCtx| {
-          let func = func.clone();
-          Box::pin(async move {
-            func
-              .call(ctx.into(), ThreadsafeFunctionCallMode::NonBlocking)
-              .into_rspack_result()?
-              .await
-              .map_err(|err| internal_error!("Failed to call rule.use function: {err}"))?
-          })
-        })))
+        Ok(Filename::Fn(Arc::new(Box::new(
+          move |ctx: FilenameFnCtx| {
+            let func = func.clone();
+            Box::pin(async move {
+              func
+                .call(ctx.into(), ThreadsafeFunctionCallMode::NonBlocking)
+                .into_rspack_result()?
+                .await
+                .map_err(|err| internal_error!("Failed to call rule.use function: {err}"))?
+            })
+          },
+        ))))
       }
       _ => unreachable!(),
     }
@@ -187,12 +197,12 @@ pub struct RawOutputOptions {
   pub enabled_wasm_loading_types: Vec<String>,
   pub webassembly_module_filename: String,
   pub filename: RawFilename,
-  pub chunk_filename: String,
+  pub chunk_filename: RawFilename,
   pub cross_origin_loading: RawCrossOriginLoading,
-  pub css_filename: String,
-  pub css_chunk_filename: String,
-  pub hot_update_main_filename: String,
-  pub hot_update_chunk_filename: String,
+  pub css_filename: RawFilename,
+  pub css_chunk_filename: RawFilename,
+  pub hot_update_main_filename: RawFilename,
+  pub hot_update_chunk_filename: RawFilename,
   pub hot_update_global: String,
   pub unique_name: String,
   pub chunk_loading_global: String,
@@ -230,13 +240,13 @@ impl RawOptionsApply for RawOutputOptions {
       unique_name: self.unique_name,
       chunk_loading: self.chunk_loading.as_str().into(),
       chunk_loading_global: to_identifier(&self.chunk_loading_global),
-      filename: self.filename.into(),
-      chunk_filename: self.chunk_filename.into(),
+      filename: self.filename.try_into()?,
+      chunk_filename: self.chunk_filename.try_into()?,
       cross_origin_loading: self.cross_origin_loading.into(),
-      css_filename: self.css_filename.into(),
-      css_chunk_filename: self.css_chunk_filename.into(),
-      hot_update_main_filename: self.hot_update_main_filename.into(),
-      hot_update_chunk_filename: self.hot_update_chunk_filename.into(),
+      css_filename: self.css_filename.try_into()?,
+      css_chunk_filename: self.css_chunk_filename.try_into()?,
+      hot_update_main_filename: self.hot_update_main_filename.try_into()?,
+      hot_update_chunk_filename: self.hot_update_chunk_filename.try_into()?,
       hot_update_global: self.hot_update_global,
       library: self.library.map(Into::into),
       strict_module_error_handling: self.strict_module_error_handling,

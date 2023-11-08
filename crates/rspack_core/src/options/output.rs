@@ -3,6 +3,7 @@ use std::{
   path::{Path, PathBuf},
   str::FromStr,
   string::ParseError,
+  sync::Arc,
 };
 
 use derivative::Derivative;
@@ -257,11 +258,13 @@ pub struct FilenameFnCtx<'a> {
   pub hash: &'a str,
 }
 
-pub type FilenameFn = Box<
-  dyn for<'a> Fn(FilenameFnCtx<'a>) -> BoxFuture<'a, rspack_error::Result<String>> + Sync + Send,
+pub type FilenameFn = Arc<
+  Box<
+    dyn for<'a> Fn(FilenameFnCtx<'a>) -> BoxFuture<'a, rspack_error::Result<String>> + Sync + Send,
+  >,
 >;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub enum Filename {
   String(String),
   Fn(FilenameFn),
@@ -291,14 +294,17 @@ impl From<String> for Filename {
 }
 
 impl Filename {
-  // pub fn .template(&self) -> &str {
-  //   &self.template
-  // }
+  pub fn template(&self) -> &str {
+    match &self {
+      Filename::String(content) => &content,
+      Filename::Fn(_) => "not implemented",
+    }
+  }
 
   pub fn has_hash_placeholder(&self) -> bool {
     let res = match &self {
       Filename::String(content) => content,
-      Filename::Fn(func) => &"not implemented".to_string(),
+      Filename::Fn(func) => "not implemented",
     };
     HASH_PLACEHOLDER.is_match(res) || FULL_HASH_PLACEHOLDER.is_match(res)
   }

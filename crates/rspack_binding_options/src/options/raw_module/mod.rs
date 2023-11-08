@@ -24,7 +24,7 @@ use {
   rspack_napi_shared::{NapiResultExt, NAPI_ENV},
 };
 
-use crate::{RawOptionsApply, RawResolveOptions};
+use crate::{RawFilename, RawOptionsApply, RawResolveOptions};
 
 pub fn get_builtin_loader(builtin: &str, options: Option<&str>) -> BoxLoader {
   if builtin.starts_with(SASS_LOADER_IDENTIFIER) {
@@ -419,7 +419,7 @@ impl From<RawGeneratorOptions> for GeneratorOptions {
 #[serde(rename_all = "camelCase")]
 #[napi(object)]
 pub struct RawAssetGeneratorOptions {
-  pub filename: Option<String>,
+  pub filename: Option<RawFilename>,
   pub public_path: Option<String>,
   pub data_url: Option<RawAssetGeneratorDataUrl>,
 }
@@ -427,7 +427,7 @@ pub struct RawAssetGeneratorOptions {
 impl From<RawAssetGeneratorOptions> for AssetGeneratorOptions {
   fn from(value: RawAssetGeneratorOptions) -> Self {
     Self {
-      filename: value.filename.map(|i| i.into()),
+      filename: value.filename.map(|i| i.try_into().unwrap()),
       public_path: value.public_path.map(|i| i.into()),
       data_url: value.data_url.map(|i| i.into()),
     }
@@ -453,14 +453,14 @@ impl From<RawAssetInlineGeneratorOptions> for AssetInlineGeneratorOptions {
 #[serde(rename_all = "camelCase")]
 #[napi(object)]
 pub struct RawAssetResourceGeneratorOptions {
-  pub filename: Option<String>,
+  pub filename: Option<RawFilename>,
   pub public_path: Option<String>,
 }
 
 impl From<RawAssetResourceGeneratorOptions> for AssetResourceGeneratorOptions {
   fn from(value: RawAssetResourceGeneratorOptions) -> Self {
     Self {
-      filename: value.filename.map(|i| i.into()),
+      filename: value.filename.map(|i| i.try_into().unwrap()),
       public_path: value.public_path.map(|i| i.into()),
     }
   }

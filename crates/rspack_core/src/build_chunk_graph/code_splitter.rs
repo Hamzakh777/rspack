@@ -8,7 +8,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::remove_parent_modules::RemoveParentModulesContext;
 use crate::{
   ChunkGroup, ChunkGroupInfo, ChunkGroupKind, ChunkGroupOptions, ChunkGroupOptionsKindRef,
-  ChunkGroupUkey, ChunkLoading, ChunkUkey, Compilation, Logger, ModuleIdentifier, RuntimeSpec,
+  ChunkGroupUkey, ChunkLoading, ChunkUkey, Compilation, Filename, Logger, ModuleIdentifier,
+  RuntimeSpec,
 };
 
 pub(super) struct CodeSplitter<'me> {
@@ -63,7 +64,7 @@ impl<'me> CodeSplitter<'me> {
         &mut compilation.named_chunks,
       );
       if let Some(filename) = &entry_data.options.filename {
-        chunk.filename_template = Some(filename.clone());
+        chunk.filename_template = Some(Filename::String(filename.clone()));
       }
       chunk.chunk_reasons.push(format!("Entrypoint({name})",));
       self
@@ -451,7 +452,7 @@ impl<'me> CodeSplitter<'me> {
 
       let mut chunk_group = if let Some(kind) = group_options.as_ref() && let &ChunkGroupOptionsKindRef::Entry(entry_options) = kind {
         if let Some(filename) = &entry_options.filename {
-          chunk.filename_template = Some(filename.clone());
+          chunk.filename_template = Some(Filename::String(filename.clone()));
         }
         chunk.chunk_reasons.push(format!("AsyncEntrypoint({module_identifier})"));
         self

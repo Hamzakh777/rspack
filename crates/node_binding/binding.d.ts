@@ -474,7 +474,7 @@ export interface RawAssetGeneratorDataUrlOptions {
 }
 
 export interface RawAssetGeneratorOptions {
-  filename?: string
+  filename?: RawFilename
   publicPath?: string
   dataUrl?: RawAssetGeneratorDataUrl
 }
@@ -497,7 +497,7 @@ export interface RawAssetParserOptions {
 }
 
 export interface RawAssetResourceGeneratorOptions {
-  filename?: string
+  filename?: RawFilename
   publicPath?: string
 }
 
@@ -699,6 +699,16 @@ export interface RawFallbackCacheGroupOptions {
   maxInitialSize?: number
 }
 
+export interface RawFilename {
+  type: "string" | "function"
+  stringPayload?: string
+  fnPayload?: (...args: any[]) => any
+}
+
+export interface RawFilenameFnCtx {
+  hash: string
+}
+
 export interface RawFuncUseCtx {
   resource?: string
   realResource?: string
@@ -885,13 +895,13 @@ export interface RawOutputOptions {
   wasmLoading: string
   enabledWasmLoadingTypes: Array<string>
   webassemblyModuleFilename: string
-  filename: string
-  chunkFilename: string
+  filename: RawFilename
+  chunkFilename: RawFilename
   crossOriginLoading: RawCrossOriginLoading
-  cssFilename: string
-  cssChunkFilename: string
-  hotUpdateMainFilename: string
-  hotUpdateChunkFilename: string
+  cssFilename: RawFilename
+  cssChunkFilename: RawFilename
+  hotUpdateMainFilename: RawFilename
+  hotUpdateChunkFilename: RawFilename
   hotUpdateGlobal: string
   uniqueName: string
   chunkLoadingGlobal: string
