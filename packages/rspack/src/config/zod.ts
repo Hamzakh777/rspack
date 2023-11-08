@@ -57,6 +57,7 @@ const filenameFunction = z
 	.function()
 	.args(
 		z.object({
+			// TODO: change this to the actual param we need to pass instead of hash
 			hash: z.string()
 		})
 	)
@@ -69,7 +70,7 @@ export type FilenameTemplate = z.infer<typeof filenameTemplate>;
 const filename = filenameTemplate;
 export type Filename = z.infer<typeof filename>;
 
-const entryFilename = filenameTemplate;
+const entryFilename = z.string();
 export type EntryFilename = z.infer<typeof entryFilename>;
 
 const entryRuntime = z.literal(false).or(z.string());
